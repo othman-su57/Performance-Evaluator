@@ -1,114 +1,164 @@
 import inspect
+import multiprocessing
 import time
 
 from backend.data_generator import DataGenerator
+from size_generator import GrowthPace, SizeGenerator
 
 
+# ==========================================
+# الدالة المعزولة (العامل المستقل)
+# يجب أن تكون هنا في الخارج لتجنب خطأ Pickle
+# ==========================================
+def isolated_worker(user_code: str, func_name: str, func_type: str, size: int, case_type: str,
+                    q: multiprocessing.Queue):
+    try:
+        # 1. تهيئة البيئة واستخراج الدالة
+        scope = {}
+        exec(user_code, scope)
+        target_func = scope[func_name]
+
+        # 2. توليد البيانات مرة واحدة (البيانات الأصلية)
+        dataset = DataGenerator.generate(size)
+        original_array = dataset[case_type]["list"]
+        target = dataset[case_type]["target"]
+
+        num_runs = 20
+        total_time = 0.0
+
+        # 3. حلقة القياس المتعدد
+        for _ in range(num_runs):
+            # أخذ نسخة من البيانات في كل مرة، لأن بعض الخوارزميات (مثل Sort)
+            # تعدل المصفوفة في نفس المكان (In-place)، وإذا لم نأخذ نسخة،
+            # ستكون المصفوفة مرتبة في اللفة الثانية وتفسد القياس!
+            test_array = original_array.copy()
+
+            # بدء القياس
+            start_time = time.perf_counter()
+
+            if func_type == "sort":
+                target_func(test_array)
+            elif func_type == "search":
+                target_func(test_array, target)
+
+            # إيقاف القياس
+            end_time = time.perf_counter()
+
+            total_time += (end_time - start_time)
+
+        # 4. حساب المتوسط وإرساله
+        average_time = total_time / num_runs
+        q.put(("success", average_time))
+
+    except Exception as e:
+        q.put(("error", str(e)))
+
+
+# ==========================================
+# محرك التشغيل الرئيسي
+# ==========================================
 class ExecutionEngine:
     def __init__(self, timeout_seconds):
-        # نحدد نصف ثانية كحد أقصى لتنفيذ الدالة الواحدة
         self.timeout_seconds = timeout_seconds
 
-    def run_analysis(self, user_code: str, func_name: str, sizes) -> dict:
-        execution_scope = {}
-        # القاموس الذي سيحتوي على النتائج لإرسالها للواجهة
-        results = {"best": [], "average": [], "worst": []}
+    def run_analysis(self, user_code: str, func_name: str) -> dict:
+        results = {"best": [], "avarage": [], "worst": []}
 
+        # فحص مبدئي سريع لنوع الدالة لتمريره للعامل
         try:
-            # 1. تهيئة البيئة المعزولة وحقن الكود
-            exec(user_code, execution_scope)
-
-            if func_name not in execution_scope:
+            temp_scope = {}
+            exec(user_code, temp_scope)
+            if func_name not in temp_scope:
                 return {"status": "error", "message": f"Function '{func_name}' not found in the code."}
 
-
-            target_func = execution_scope[func_name]
-            params = inspect.signature(target_func).parameters
-
+            params = inspect.signature(temp_scope[func_name]).parameters
             if len(params) == 1:
                 func_type = "sort"
             elif len(params) == 2:
                 func_type = "search"
             else:
                 return {"status": "error", "message": "Unsupported function signature"}
-            # 2. اختبار الحالات الثلاث لكل حجم مصفوفة
-            for case_type in ["best", "average", "worst"]:
-                for size in sizes:
-                    # نولد بيانات جديدة لكل محاولة لضمان الدقة
-                    # (بافتراض أنك وضعت كلاس DataGenerator في نفس الملف أو قمت باستدعائه)
-                    dataset = DataGenerator.generate(size)
-                    test_array = dataset[case_type]["list"]
-                    target = dataset[case_type]["target"]
-                    # --- بدء القياس ---
-                    start_time = time.perf_counter()
-
-                    try:
-                        # تشغيل دالة المستخدم
-                        if func_type == "sort":
-                            target_func(test_array.copy())
-                        elif func_type == "search":
-                            target_func(test_array,target)
-                    except Exception as e:
-                        # التقاط أي خطأ يحدث أثناء التشغيل (Runtime Error)
-                        return {"status": "error",
-                                "message": f"Runtime Error in {case_type} case (size {size}): {str(e)}"}
-
-                    end_time = time.perf_counter()
-                    # --- انتهاء القياس ---
-
-                    exec_time = end_time - start_time
-                    results[case_type].append((size, exec_time))
-
-                    # صمام الأمان: إذا استغرق التنفيذ وقتاً طويلاً، نوقف التكبير في هذه الحالة
-                    if exec_time > self.timeout_seconds:
-                        print(f"[Warning] Timeout reached for {case_type} case at size {size}. Stopping larger inputs.")
-                        break  # نخرج من حلقة الـ sizes وننتقل للحالة التالية (case_type)
-
-            return {"status": "success", "data": results}
-
         except Exception as e:
-            return {"status": "error", "message": f"Execution setup error: {str(e)}"}
+              print({"status": "error", "message": f"Execution setup error: {str(e)}"})
+
+        growth_paces = list(GrowthPace)
+
+        for case_type in ["best", "avarage", "worst"]:
+            for i in range(30, 4, -5):
+                for growth_pace in growth_paces:
+                    sizes = SizeGenerator.generate_sizes(growth_pace,i)
+                    print(growth_pace)
+                    print(sizes)
+                    for size in sizes:
+                        # تجهيز قناة الاتصال والعملية المعزولة
+                        q = multiprocessing.Queue()
+                        p = multiprocessing.Process(
+                            target=isolated_worker,
+                            args=(user_code, func_name, func_type, size, case_type, q)
+                        )
+
+                        p.start()
+                        p.join(self.timeout_seconds)
+
+                        # معالجة الـ Timeout
+                        if p.is_alive():
+                            p.terminate()
+                            p.join()
+                            print(
+                                f"[Warning] Timeout reached for {case_type} case at size {size}. Falling back to slower pace.")
+                            results[case_type].clear()
+                            break  # كسر حلقة الأحجام والانتقال للسرعة الأبطأ
+
+                        # جلب النتائج إذا نجحت العملية
+                        if not q.empty():
+                            status, exec_time_or_error = q.get()
+
+                            if status == "error":
+                                # 1. اعتراض خطأ الـ Recursion
+                                if "recursion depth exceeded" in exec_time_or_error.lower():
+                                    print(
+                                        f"[Warning] Recursion limit reached for {case_type} case at size {size}. Falling back to slower pace.")
+                                    results[case_type].clear()
+                                    break  # كسر الحلقة للانتقال للسرعة الأبطأ (نفس سلوك الـ Timeout)
+
+                                # 2. أي خطأ آخر (Syntax, TypeError) هو خطأ مميت
+                                else:
+                                    return {
+                                        "status": "error",
+                                        "message": f"Runtime Error in {case_type} case (size {size}): {exec_time_or_error}"
+                                    }
+                            elif status == "success":
+                                results[case_type].append((size, exec_time_or_error))
+                        else:
+                            return {"status": "error", "message": "Unknown multiprocessing error: Queue empty."}
+
+                # إذا اكتملت قائمة الأحجام بالكامل بنجاح نغادر حلقة السرعة
+                    if len(results[case_type]) == len(sizes):
+                        break
+                if len(results[case_type]) == i:
+                    break
+
+        return {"status": "success", "data": results}
 
 
 # ==========================================
 # تجربة الوحدة (Unit Testing)
 # ==========================================
 if __name__ == "__main__":
-    # كود تجريبي لخوارزمية ترتيب فقاعي (Bubble Sort) أداؤها O(n^2)
     test_code = """
-def merge_sort(arr):
-    if len(arr) <= 1:
-        return arr
-
-    mid = len(arr) // 2
-    left = merge_sort(arr[:mid])
-    right = merge_sort(arr[mid:])
-
-    return merge(left, right)
-
-def merge(left, right):
-    result = []
-    i = j = 0
-
-    while i < len(left) and j < len(right):
-        if left[i] < right[j]:
-            result.append(left[i])
-            i += 1
-        else:
-            result.append(right[j])
-            j += 1
-
-    result.extend(left[i:])
-    result.extend(right[j:])
-    return result
+def exponential_test(arr):
+    n = len(arr)
+    
+    def branch(x):
+        if x <= 0:
+            return 1
+        return branch(x - 1) + branch(x - 1)
+        
+    return branch(n)
 """
-    # أحجام المصفوفات التي نريد اختبارها
-    test_sizes = [10, 100, 500, 1000, 2000, 5000]
 
-    engine = ExecutionEngine(timeout_seconds=5)
-
-    # نمرر الكود، اسم الدالة (الذي المفترض أن CodeParser استخرجه)، والأحجام
-    output = engine.run_analysis(test_code, "merge_sort", test_sizes)
+    engine = ExecutionEngine(timeout_seconds=0.5)
+    output = engine.run_analysis(test_code, "exponential_test")
 
     import pprint
 

@@ -23,7 +23,7 @@ class DataGenerator:
                 "list": best_case,
                 "target": best_target
             },
-            "average": {
+            "avarage": {
                 "list": average_case,
                 "target": average_target
             },

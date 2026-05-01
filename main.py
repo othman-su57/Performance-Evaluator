@@ -1,52 +1,376 @@
-import time
-import random
+import customtkinter as ctk
+import numpy as np
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
+
+from api import AlgorithmEvaluatorAPI
 
 
-user_code = """
-def my_algorithm(arr):
-    n = len(arr)
-    for i in range(n):
-        for j in range(i+1, n):
-            if arr[i] > arr[j]:
-                arr[i], arr[j] = arr[j], arr[i]
-    return arr
-"""
+class PerformanceEvaluatorApp(ctk.CTk):
 
-# 1. إنشاء قاموس فارغ لالتقاط ما سيكتبه المستخدم
-execution_scope = {}
+    def __init__(self):
+        super().__init__()
 
-try:
-    # 2. تنفيذ النص البرمجي بأمان نسبي
-    # نمرر {} للمتغيرات العامة (Globals) ونمرر القاموس للمتغيرات المحلية (Locals)
-    exec(user_code, {}, execution_scope)
+        self.title("Performance Evaluator - Dashboard")
+        self.geometry("1100x700")
 
-    # 3. استخراج الدالة من القاموس 
-    # في مشروعك، يمكنك إجبار المستخدم على اسم معين للدالة، أو البحث عن أول دالة قابلة للاستدعاء
-    func_name = 'my_algorithm'
+        ctk.set_appearance_mode("Dark")
+        ctk.set_default_color_theme("blue")
 
-    if func_name in execution_scope:
-        target_function = execution_scope[func_name]
+        # =========================
+        # Main Grid
+        # =========================
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=0)
+        self.grid_columnconfigure(0, weight=1)
 
-        # --- اختبار التنفيذ وقياس الوقت ---
-        # توليد مصفوفة عشوائية للتجربة
-        test_array = [random.randint(1, 100) for _ in range(1000)]
+        # =========================
+        # Top Frame
+        # =========================
+        self.top_frame = ctk.CTkFrame(self)
+        self.top_frame.grid(
+            row=0,
+            column=0,
+            sticky="nsew",
+            padx=10,
+            pady=(10, 5)
+        )
 
-        # بدء العداد بدقة عالية جداً
-        start_time = time.perf_counter()
+        self.top_frame.grid_rowconfigure(0, weight=1)
+        self.top_frame.grid_columnconfigure(0, weight=1)
+        self.top_frame.grid_columnconfigure(1, weight=1)
 
-        # تشغيل دالة المستخدم وتمرير المصفوفة لها
-        result = target_function(test_array)
+        # =========================
+        # Code Editor
+        # =========================
+        self.editor_frame = ctk.CTkFrame(
+            self.top_frame,
+            fg_color="transparent"
+        )
 
-        # إيقاف العداد
-        end_time = time.perf_counter()
+        self.editor_frame.grid(
+            row=0,
+            column=0,
+            sticky="nsew",
+            padx=5,
+            pady=5
+        )
 
-        execution_time = end_time - start_time
+        self.editor_label = ctk.CTkLabel(
+            self.editor_frame,
+            text="Code Editor",
+            font=("Arial", 16, "bold")
+        )
 
-        print(f"Time taken for array size {len(test_array)}: {execution_time:.6f} seconds")
+        self.editor_label.pack(
+            anchor="w",
+            pady=(0, 5)
+        )
 
-    else:
-        print(f"Error: Function '{func_name}' not found in user code.")
+        self.code_textbox = ctk.CTkTextbox(
+            self.editor_frame,
+            font=("Consolas", 14)
+        )
 
-except Exception as e:
-    # التقاط أي خطأ في كود المستخدم (مثل أخطاء الـ Syntax)
-    print(f"Compilation or Execution Error: {e}")
+        self.code_textbox.pack(
+            fill="both",
+            expand=True
+        )
+
+        self.code_textbox.insert(
+            "0.0",
+            "def test_function(arr):\n    pass"
+        )
+
+        # =========================
+        # Results Panel
+        # =========================
+        self.results_frame = ctk.CTkFrame(
+            self.top_frame,
+            fg_color="transparent"
+        )
+
+        self.results_frame.grid(
+            row=0,
+            column=1,
+            sticky="nsew",
+            padx=5,
+            pady=5
+        )
+
+        self.results_label = ctk.CTkLabel(
+            self.results_frame,
+            text="Analysis Results",
+            font=("Arial", 16, "bold")
+        )
+
+        self.results_label.pack(
+            anchor="w",
+            pady=(0, 5)
+        )
+
+        self.chart_placeholder = ctk.CTkFrame(
+            self.results_frame,
+            corner_radius=10
+        )
+
+        self.chart_placeholder.pack(
+            fill="both",
+            expand=True,
+            pady=(0, 10)
+        )
+
+        self.complexity_label = ctk.CTkLabel(
+            self.results_frame,
+            text="Detected Complexity: --",
+            font=("Arial", 16)
+        )
+
+        self.complexity_label.pack(anchor="w")
+
+        self.confidence_label = ctk.CTkLabel(
+            self.results_frame,
+            text="Confidence: --%",
+            font=("Arial", 14)
+        )
+
+        self.confidence_label.pack(anchor="w")
+
+        self.setup_matplotlib()
+
+        # =========================
+        # Bottom Frame
+        # =========================
+        self.bottom_frame = ctk.CTkFrame(
+            self,
+            height=80
+        )
+
+        self.bottom_frame.grid(
+            row=1,
+            column=0,
+            sticky="ew",
+            padx=10,
+            pady=(5, 10)
+        )
+
+        self.bottom_frame.grid_propagate(False)
+
+        self.run_btn = ctk.CTkButton(
+            self.bottom_frame,
+            text="Run Analysis",
+            command=self.run_analysis
+        )
+
+        self.run_btn.grid(
+            row=0,
+            column=0,
+            padx=20,
+            pady=20
+        )
+
+        self.status_label = ctk.CTkLabel(
+            self.bottom_frame,
+            text="Status: Ready",
+            text_color="green"
+        )
+
+        self.status_label.grid(
+            row=0,
+            column=1,
+            sticky="w"
+        )
+
+        self.case_selector = ctk.CTkSegmentedButton(
+            self.bottom_frame,
+            values=[
+                "Best Case",
+                "Avarage Case",
+                "Worst Case"
+            ],
+            command=self.on_case_change,
+            state="disabled"
+        )
+
+        self.case_selector.set("Avarage Case")
+
+        self.case_selector.grid(
+            row=0,
+            column=2,
+            padx=20,
+            pady=20
+        )
+
+        self.current_json_data = None
+
+    # =========================
+    # Matplotlib Setup
+    # =========================
+    def setup_matplotlib(self):
+
+        self.fig = Figure(
+            figsize=(5, 4),
+            dpi=100
+        )
+
+        self.bg_color = "#2b2b2b"
+        self.fg_color = "white"
+
+        self.fig.patch.set_facecolor(
+            self.bg_color
+        )
+
+        self.ax = self.fig.add_subplot(111)
+
+        self.ax.set_facecolor(
+            self.bg_color
+        )
+
+        self.canvas = FigureCanvasTkAgg(
+            self.fig,
+            master=self.chart_placeholder
+        )
+
+        self.canvas.get_tk_widget().pack(
+            fill="both",
+            expand=True
+        )
+
+    # =========================
+    # Events
+    # =========================
+    def run_analysis(self):
+
+        self.status_label.configure(
+            text="Status: Analyzing...",
+            text_color="orange"
+        )
+
+        self.update()
+
+        source_code = self.code_textbox.get(
+            "1.0",
+            "end"
+        )
+
+        self.current_json_data = AlgorithmEvaluatorAPI(
+            0.5
+        ).evaluate(source_code)
+
+        self.status_label.configure(
+            text="Status: Analysis Complete",
+            text_color="green"
+        )
+
+        self.case_selector.configure(
+            state="normal"
+        )
+
+        current_case = self.case_selector.get().split()[0].lower()
+
+        self.update_view(current_case)
+
+    def on_case_change(self, selected_case):
+
+        if self.current_json_data:
+            case_name = selected_case.split()[0].lower()
+            self.update_view(case_name)
+
+    def update_view(self, case_name):
+
+        dynamic_data = self.current_json_data[
+            "dynamic_analysis"
+        ]
+
+        estimation = dynamic_data[
+            "complexity_estimation"
+        ][case_name]
+
+        raw_plot = dynamic_data[
+            "raw_plot_data"
+        ][case_name]
+
+        complexity = estimation[
+            "detected_complexity"
+        ]
+
+        confidence = estimation[
+            "confidence_percentage"
+        ]
+
+        curve_y = list(
+            reversed(
+                estimation["curve_data"]
+            )
+        )
+        sizes = [
+            point[0]
+            for point in reversed(raw_plot)
+        ]
+
+        actual_times = [
+            point[1]
+            for point in reversed(raw_plot)
+        ]
+
+        self.complexity_label.configure(
+            text=f"Detected Complexity: {complexity}"
+        )
+
+        self.confidence_label.configure(
+            text=f"Confidence: {confidence}%"
+        )
+
+        self.ax.clear()
+
+        # measured data
+        self.ax.plot(
+            sizes,
+            actual_times,
+            marker="o",
+            linewidth=2,
+            label="Measured Time"
+        )
+
+        # fitted curve
+        if curve_y:
+
+            curve_x = np.linspace(
+                min(sizes),
+                max(sizes),
+                len(curve_y)
+            )
+
+            self.ax.plot(
+                curve_x,
+                curve_y,
+                linestyle="--",
+                linewidth=2,
+                label=f"Fitted {complexity}"
+            )
+
+        self.ax.set_xlabel(
+            "Input Size (n)"
+        )
+
+        self.ax.set_ylabel(
+            "Time (seconds)"
+        )
+
+        self.ax.set_title(
+            f"{case_name.capitalize()} Case"
+        )
+
+        self.ax.legend()
+
+        self.ax.grid(
+            True,
+            linestyle=":"
+        )
+
+        self.canvas.draw()
+
+
+if __name__ == "__main__":
+    app = PerformanceEvaluatorApp()
+    app.mainloop()

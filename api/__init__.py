@@ -1,10 +1,11 @@
+
 from backend.input_parser import CodeParser
 from backend.excecution_anlyser import ExecutionEngine
 from backend.math_engine import MathAnalyzer
 
 
 class AlgorithmEvaluatorAPI:
-    VALID_CASES = {"best", "average", "worst"}
+    VALID_CASES = {"best", "avarage", "worst"}
 
     def __init__(self, timeout_seconds=0.5):
         self.execution_engine = ExecutionEngine(timeout_seconds=timeout_seconds)
@@ -13,10 +14,10 @@ class AlgorithmEvaluatorAPI:
     # ==========================
     # PUBLIC
     # ==========================
-    def evaluate(self, source_code: str, test_sizes: list, complexity: str = "worst") -> dict:
+    def evaluate(self, source_code: str) -> dict:
 
         # -------- 1) Input Validation --------
-        validation_error = self._validate_inputs(source_code, test_sizes, complexity)
+        validation_error = self._validate_inputs(source_code)
         if validation_error:
             return validation_error
 
@@ -28,14 +29,14 @@ class AlgorithmEvaluatorAPI:
         func_name = parse_result["function_name"]
 
         # -------- 3) Dynamic Execution --------
-        exec_result = self._run_dynamic_analysis(source_code, func_name, test_sizes)
+        exec_result = self._run_dynamic_analysis(source_code, func_name)
         if exec_result["status"] == "error":
             return exec_result
 
         raw_data = exec_result["data"]
 
         # -------- 4) Math Analysis --------
-        math_result = self._run_math_analysis(raw_data, complexity)
+        math_result = self._run_math_analysis(raw_data)
 
         # -------- 5) Final Report --------
         return self._build_response(parse_result, math_result, raw_data)
@@ -44,15 +45,9 @@ class AlgorithmEvaluatorAPI:
     # INTERNAL METHODS
     # ==========================
 
-    def _validate_inputs(self, source_code, test_sizes, complexity):
+    def _validate_inputs(self, source_code):
         if not source_code.strip():
             return {"status": "error", "message": "Empty source code"}
-
-        if not isinstance(test_sizes, list) or len(test_sizes) < 2:
-            return {"status": "error", "message": "test_sizes must be a list with at least 2 values"}
-
-        if complexity not in self.VALID_CASES:
-            return {"status": "error", "message": f"Invalid complexity type: {complexity}"}
 
         return None
 
@@ -65,28 +60,24 @@ class AlgorithmEvaluatorAPI:
 
         return result
 
-    def _run_dynamic_analysis(self, source_code, func_name, test_sizes):
-        return self.execution_engine.run_analysis(source_code, func_name, test_sizes)
+    def _run_dynamic_analysis(self, source_code, func_name):
+        return self.execution_engine.run_analysis(source_code, func_name)
 
-    def _run_math_analysis(self, raw_data, complexity):
-        case_data = raw_data.get(complexity, [])
+    def _run_math_analysis(self, raw_data):
 
-        if not case_data:
-            return {
-                "status": "error",
-                "message": "No data available for selected case"
-            }
 
-        sizes = [p[0] for p in case_data if p[1] is not None]
-        times = [p[1] for p in case_data if p[1] is not None]
+        math_results = {}
 
-        if len(sizes) < 2:
-            return {
-                "status": "error",
-                "message": "Insufficient valid data points"
-            }
+        for case in [ "best", "avarage","worst"]:
+            case_data = raw_data.get(case, [])
 
-        return self.math_analyzer.analyze(sizes, times)
+            sizes = [p[0] for p in case_data if p[1] is not None]
+            times = [p[1] for p in case_data if p[1] is not None]
+
+            math_results[case] = self.math_analyzer.analyze(sizes, times)
+
+        return math_results
+
 
     def _build_response(self, parse_result, math_result, raw_data):
         return {
@@ -103,3 +94,42 @@ class AlgorithmEvaluatorAPI:
                 "raw_plot_data": raw_data
             }
         }
+if __name__ =="__main__":
+    test_code = """
+def merge_sort(arr):
+    if len(arr) <= 1:
+        return arr
+
+    mid = len(arr) // 2
+
+    left = merge_sort(arr[:mid])
+    right = merge_sort(arr[mid:])
+
+    return merge(left, right)
+
+
+def merge(left, right):
+    result = []
+
+    i = 0
+    j = 0
+
+    while i < len(left) and j < len(right):
+
+        if left[i] <= right[j]:
+            result.append(left[i])
+            i += 1
+
+        else:
+            result.append(right[j])
+            j += 1
+
+    result.extend(left[i:])
+    result.extend(right[j:])
+
+    return result
+"""
+    response = AlgorithmEvaluatorAPI(0.5).evaluate(test_code)
+    import json
+
+    print(json.dumps(response, indent=4, ensure_ascii=False))

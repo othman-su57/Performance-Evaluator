@@ -2,6 +2,8 @@ import customtkinter as ctk
 import ast
 import json
 
+from debuger import Debugger
+
 
 class ManualModePanel(ctk.CTkFrame):
     def __init__(self, master, editor_textbox, **kwargs):

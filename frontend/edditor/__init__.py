@@ -3,7 +3,7 @@ from pygments import lex
 from pygments.lexers import PythonLexer
 from pygments.token import Token
 
-class EditorPanel(ctk.CTkFrame):
+class CodeEditorPanel(ctk.CTkFrame):
     def __init__(self, master, **kwargs):
         super().__init__(master, **kwargs)
 
@@ -73,7 +73,7 @@ if __name__ == "__main__":
     app = ctk.CTk()
     app.geometry("800x500")
 
-    editor = EditorPanel(app)
+    editor = CodeEditorPanel(app)
     editor.pack(fill="both", expand=True)
 
     # حقن كود تجريبي

@@ -2,7 +2,7 @@ import customtkinter as ctk
 import numpy as np
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
-
+import threading
 from api import AlgorithmEvaluatorAPI
 
 
@@ -253,9 +253,7 @@ class PerformanceEvaluatorApp(ctk.CTk):
             "end"
         )
 
-        self.current_json_data = AlgorithmEvaluatorAPI(
-            0.5
-        ).evaluate(source_code)
+        threading.Thread(target=self.evaluation,args=(source_code,),daemon=True)
 
         self.status_label.configure(
             text="Status: Analysis Complete",
@@ -370,7 +368,10 @@ class PerformanceEvaluatorApp(ctk.CTk):
 
         self.canvas.draw()
 
-
+    def evaluation(self,source_code):
+        self.current_json_data=AlgorithmEvaluatorAPI(
+            0.5
+        ).evaluate(source_code)
 if __name__ == "__main__":
     app = PerformanceEvaluatorApp()
     app.mainloop()

@@ -84,7 +84,7 @@ class ExecutionEngine:
         growth_paces = list(GrowthPace)
 
         for case_type in ["best", "avarage", "worst"]:
-            for i in range(30, 4, -5):
+            for i in range(15,4, -3):
                 for growth_pace in growth_paces:
                     sizes = SizeGenerator.generate_sizes(growth_pace,i)
                     print(growth_pace)

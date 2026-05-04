@@ -102,6 +102,7 @@ class ManualModePanel(ctk.CTkFrame):
         self.editor_textbox.tag_add("highlight", f"{line_num}.0", f"{line_num}.end")
         self.editor_textbox.see(f"{line_num}.0")
 
+
         # 4. تفعيل وتعطيل الأزرار
         self.prev_btn.configure(state="normal" if self.current_step > 0 else "disabled")
         self.next_btn.configure(state="normal" if self.current_step < len(self.history) - 1 else "disabled")

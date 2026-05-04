@@ -80,6 +80,11 @@ class PerformanceEvaluatorApp(ctk.CTk):
             self.update_view(case_name)
 
     def update_view(self, case_name):
+        if self.current_json_data["status"] == "error":
+            temp = self.editor_panel.textbox.get("1.0","end")
+            self.editor_panel.textbox.delete("1.0","end")
+            self.editor_panel.textbox.insert("1.0","error happend\n"+temp)
+            return 
         dynamic_data = self.current_json_data["dynamic_analysis"]
         estimation = dynamic_data["complexity_estimation"][case_name]
         raw_plot = dynamic_data["raw_plot_data"][case_name]

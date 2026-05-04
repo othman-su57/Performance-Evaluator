@@ -373,5 +373,10 @@ class PerformanceEvaluatorApp(ctk.CTk):
             0.5
         ).evaluate(source_code)
 if __name__ == "__main__":
-    app = PerformanceEvaluatorApp()
-    app.mainloop()
+    def insertion_sort(arr):
+        for i in range(1, len(arr)):
+            for j in range(1, len(arr)):
+                for k in range(1, len(arr)):
+                    print("hallo")
+        return arr
+    insertion_sort([1,2,3,4,5,6])

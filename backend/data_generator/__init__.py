@@ -19,15 +19,15 @@ class DataGenerator:
         worst_target = -1  # غير موجود → worst case حقيقي
 
         return {
-            "best": {
+            "sorted": {
                 "list": best_case,
                 "target": best_target
             },
-            "avarage": {
+            "random": {
                 "list": average_case,
                 "target": average_target
             },
-            "worst": {
+            "reversed": {
                 "list": worst_case,
                 "target": worst_target
             }

@@ -11,7 +11,7 @@ class GrowthPace(Enum):
     P6 = 1.5
     P7 = 1.4
     P8 = 1.3
-    P9 = 1.2
+    P9 = 1.1
     P10 = 1
 
 

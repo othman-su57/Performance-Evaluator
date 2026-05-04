@@ -18,11 +18,11 @@ class ControlPanel(ctk.CTkFrame):
 
         self.case_selector = ctk.CTkSegmentedButton(
             self,
-            values=["Best Case", "Avarage Case", "Worst Case"],
+            values=["Sorted Case", "Random Case", "Reversed Case"],
             command=case_change_callback,
             state="disabled"
         )
-        self.case_selector.set("Avarage Case")
+        self.case_selector.set("Random Case")
         self.case_selector.grid(row=0, column=2, padx=20, pady=20)
 
     def set_status(self, text, color="white"):

@@ -34,17 +34,26 @@ def isolated_worker(user_code: str, func_name: str, func_type: str, size: int, c
             test_array = original_array.copy()
 
             # بدء القياس
-            start_time = time.perf_counter()
+            start_time = None
+            end_time = None
 
             if func_type == "sort":
+                start_time = time.perf_counter()
                 target_func(test_array)
+                end_time = time.perf_counter()
+                total_time += (end_time - start_time)
             elif func_type == "search":
+                start_time = time.perf_counter()
                 target_func(test_array, target)
-
+                end_time = time.perf_counter()
+                total_time += (end_time - start_time)
+            elif func_type=="numeric":
+                start_time = time.perf_counter()
+                target_func(len(test_array))
+                end_time = time.perf_counter()
+                total_time += (end_time - start_time)
             # إيقاف القياس
-            end_time = time.perf_counter()
 
-            total_time += (end_time - start_time)
 
         # 4. حساب المتوسط وإرساله
         average_time = total_time / num_runs
@@ -62,7 +71,7 @@ class ExecutionEngine:
         self.timeout_seconds = timeout_seconds
 
     def run_analysis(self, user_code: str, func_name: str) -> dict:
-        results = {"best": [], "avarage": [], "worst": []}
+        results = {"sorted": [], "random": [], "reversed": []}
 
         # فحص مبدئي سريع لنوع الدالة لتمريره للعامل
         try:
@@ -70,20 +79,38 @@ class ExecutionEngine:
             exec(user_code, temp_scope)
             if func_name not in temp_scope:
                 return {"status": "error", "message": f"Function '{func_name}' not found in the code."}
+            params = list(
+                inspect.signature(
+                    temp_scope[func_name]
+                ).parameters.values()
+            )
 
-            params = inspect.signature(temp_scope[func_name]).parameters
-            if len(params) == 1:
+            # numeric
+            if (
+                    len(params) == 1 and
+                    params[0].annotation in [int, float]
+            ):
+                func_type = "numeric"
+
+            # sort
+            elif len(params) == 1:
                 func_type = "sort"
+
+            # search
             elif len(params) == 2:
                 func_type = "search"
+
             else:
-                return {"status": "error", "message": "Unsupported function signature"}
+                return {
+                    "status": "error",
+                    "message": "Unsupported function signature"
+                }
         except Exception as e:
               print({"status": "error", "message": f"Execution setup error: {str(e)}"})
 
         growth_paces = list(GrowthPace)
 
-        for case_type in ["best", "avarage", "worst"]:
+        for case_type in ["sorted", "random", "reversed"]:
             for i in range(15,4, -3):
                 for growth_pace in growth_paces:
                     sizes = SizeGenerator.generate_sizes(growth_pace,i)
@@ -123,6 +150,7 @@ class ExecutionEngine:
 
                                 # 2. أي خطأ آخر (Syntax, TypeError) هو خطأ مميت
                                 else:
+
                                     return {
                                         "status": "error",
                                         "message": f"Runtime Error in {case_type} case (size {size}): {exec_time_or_error}"
@@ -146,8 +174,8 @@ class ExecutionEngine:
 # ==========================================
 if __name__ == "__main__":
     test_code = """
-def exponential_test(arr):
-    n = len(arr)
+def exponential_test(n:int):
+
     
     def branch(x):
         if x <= 0:

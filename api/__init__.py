@@ -5,7 +5,7 @@ from backend.math_engine import MathAnalyzer
 
 
 class AlgorithmEvaluatorAPI:
-    VALID_CASES = {"best", "avarage", "worst"}
+    VALID_CASES = {"sorted", "random", "reversed"}
 
     def __init__(self, timeout_seconds=0.5):
         self.execution_engine = ExecutionEngine(timeout_seconds=timeout_seconds)
@@ -68,7 +68,7 @@ class AlgorithmEvaluatorAPI:
 
         math_results = {}
 
-        for case in [ "best", "avarage","worst"]:
+        for case in [ "sorted", "random","reversed"]:
             case_data = raw_data.get(case, [])
 
             sizes = [p[0] for p in case_data if p[1] is not None]
